@@ -131,3 +131,4 @@ dmypy.json
 .idea/
 
 idea
+aws_creds/creds.json
