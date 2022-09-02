@@ -2,8 +2,8 @@
 
 The high level design for dynamic credential generation is depicted in the diagram below:
 ![Architecture Overview](assets/architecture.svg)
-1. [Domsed](https://github.com/cerebrotech/domsed) is used to inject a side-car in the App Pod.
-2. The side-car is a Flask App which exposes two endpoints to the `run` container to fetch temporary aws credentials dynamically   
+1. [Domsed](https://github.com/cerebrotech/domsed) is used to inject a side-car in the Workspace Pod.
+2. The side-car is a Flask App which generates AWS Credentials for each role the user is mapped to and loads these in a shared folder (with the `run` container)   
 3. The injected side-car communicates with Hashicorp Vault instance using a token mounted as a secret. 
 4. Vault communicates with AWS using a AWS service account with limited privileges to generate credentials using STS but limited by permission boundaries
 
@@ -53,11 +53,19 @@ The overall Vault [Getting  Started tutorial](https://learn.hashicorp.com/collec
 
 ## Quick Install
 
-Once Vault is installed add the following environment variables and run `./install.sh`
-```
+For local testing add the following environment variables and run `./install_local.sh`
+```shell
 export VAULT_ADDR=http://127.0.0.1:8200 #Replace with your own url for remote vault
 export VAULT_TOKEN="ADD HERE"
-export VAULT_NS="" #Add your own namespace. Only valid for enterprise version. If so replace with export VAULT_NS="dominoaws" o
+export docker_version=beta_v3 #Add the side-car to a docker registry with a tag
+./scripts/install_local.sh $docker_version
+```
+
+For remote vault run `./install.sh`
+```shell
+export VAULT_ADDR="ADD HERE"
+export VAULT_TOKEN="ADD HERE"
+export VAULT_NAMESPACE="ADD HERE"
 export docker_version=beta_v3 #Add the side-car to a docker registry with a tag
 ./scripts/install.sh $docker_version
 ```
@@ -206,7 +214,7 @@ This achieves the following:
    ```
 
 ### Configure the k8s cluster
-First install Domsed and execute the command
+First install Domsed and execute the command (Not included in the `install_local.sh`)
 ```shell
 ./scripts/install-vault-cred-prop-to-domino.sh $docker_version
 ```
@@ -240,238 +248,121 @@ This performs the following steps:
           }
       EOF
    ```
-2. Deploy the Domsed Mutation to inject the Vault Side Car
+2. Deploy the Domsed Mutation to inject the Vault Side Car (Do not do this on the local machine install)
    ```shell
    #Deploy the DOMSED Mutation to perform AWS Credential Propagation using Dynamic Secrets
    kubectl delete -f ./mutations/dynamic-vault-based-creds-mutation.yaml -n $platform_namespace
    kubectl create -f ./mutations/dynamic-vault-based-creds-mutation.yaml -n $platform_namespace
    ```
+   
+    The mutation is described as follows:
+   ```json
+   kind: Mutation
+   metadata:
+     name: dynamic-vault-based-creds-mutation
+   rules:
+     -
+       labelSelectors:
+         - "dominodatalab.com/workload-type in (Workspace,Batch,Scheduled)"
+       insertVolumeMounts:
+         containerSelector:
+           - run
+         volumeMounts:
+           - name: log-volume
+             mountPath: /etc/log/vault/
+             readOnly: true
+           - mountPath: /etc/.aws/
+             name: dynamic-aws-creds
+             readOnly: true
+   
+       insertContainer:
+         containerType: app
+         spec:
+           name: z-vault-client-side-car
+           image: quay.io/domino/vault-creds-prop:latest
+           args: [ '/',5010 ]
+           volumeMounts:
+             - name: log-volume
+               mountPath: /etc/log/vault/
+             - name: podinfo
+               mountPath: /etc/labels/
+             - name: dynamic-aws-creds-config-volume
+               mountPath: /etc/config/
+             - mountPath: /etc/.aws/
+               name: dynamic-aws-creds
+             - mountPath: /etc/vault/
+               name: vault-token
+               readOnly: true
+       insertVolumes:
+         - emptyDir: { }
+           name: dynamic-aws-creds
+         - emptyDir: { }
+           name: log-volume
+         - name: dynamic-aws-creds-config-volume
+           configMap:
+             name: dynamic-aws-creds-config
+         - name: vault-token
+           secret:
+             secretName: vault-token
+         - name: podinfo
+           downwardAPI:
+             defaultMode: 420
+             items:
+               - fieldRef:
+                   fieldPath: metadata.labels
+                 path: "labels"
+       modifyEnv:
+         containerSelector:
+         - run
+         env:
+         - name: AWS_SHARED_CREDENTIALS_FILE
+           value: "/etc/.aws/credentials"
+   
+   ```
 
-### Define access control by calling user and project (Federated User)
+The mutation produces the following:
 
-We can also provide access control by {DOMINO-PROJECT-OWNER}-{DOMINO-PROJECT}-{CALLING-DOMINO-USER}
-
-For this type of control we use "Federation Token". The sample file is located in `./config/vault_role_by_project_and_user.json`
-```json
-{
-  "users_by_project": {
-    "test-user-1-quick-start": {
-      "test-user-1": {
-        "policies": [
-          "vault-test-user-1_policy",
-          "vault-test-user-2_policy"
-        ]
-      },
-      "test-user-2": {
-        "policies": [
-          "vault-test-user-2_policy"
-        ]
-      },
-      "test-user-3": {
-        "policies": [
-          "vault-test-user-3_policy"
-        ]
-      }
-    },
-    "test-user-2-quick-start": {
-      "test-user-2": {
-        "policies": [
-          "vault-test-user-2_policy"
-        ]
-      },
-      "test-user-3": {
-        "policies": [
-          "vault-test-user-3_policy"
-        ]
-      }
-    },
-    "test-user-3-quick-start": {
-      "test-user-1": {
-        "policies": [
-          "vault-test-user-1_policy"
-        ]
-      },
-      "test-user-3": {
-        "policies": [
-          "vault-test-user-3_policy"
-        ]
-      }
-    }
-  }
-}
-
-
-```
-
-We have the following projects, owner, collaborators and policy relationship in the above file:
-
-| Project      | Owner       | Collaborators|Policies
-|--------------|-------------|--------------|--------
-|quick-start   |test-user-1  |test-user-1|vault-test-user-1_policy, vault-test-user-2_policy
-|    | |test-user-2|vault-test-user-2_policy
-|    | |test-user-3|vault-test-user-3_policy
-|quick-start   |test-user-2|test-user-2|vault-test-user-2_policy
-|    | |test-user-3|vault-test-user-3_policy
-|quick-start   |test-user-3|test-user-3|vault-test-user-3_policy
-|    | |test-user-1|vault-test-user-1_policy
-
+1. When the workspace is launched a side-car gets attached with the container name `z-vault-client-side-car`
+2. The side car runs as a Flask endpoint on port `5010`
+3. The following volumes are mounted in the side-car
+   - `/etc/log/vault/` to store the logs produced by the side-car.
+   - `/etc/labels/` all pod labels are stored here in a file called `labels`. It is used to identify the `domino-user-name` to which the workspace belongs
+   - `/etc/config/` This folder contains the file `dynamic-aws-creds-config` which is to be loaded from the config map `dynamic-aws-creds-config`
+   - `/etc/vault/` this folder contains a file `token` which is the vault token used by the side-car to communicate with vault (Protect this token). It is loaded from the secret `vault-token`
+   - `/etc/.aws/` this folder is used by the side-car to write the `credentials` file for the user
+4. The folder `/etc/.aws` is shared with the run-container (READONLY)
+5. An env variable is injected into the `run` container by the name `AWS_SHARED_CREDENTIALS_FILE` and set to `/etc/.aws/credentials`. This sets the default location of the aws credentials file.
+   
 
 ### Map roles to users in Vault
-Now we need to configure roles inside Vault which will be configured to do one of the following on behalf of the caller :
 
-1. AssumeRole - The naming convention is `vault-{DOMINO_USER_NAME}`
-   This type of Vault Role will be attached to a list of `role_arns`
-2. FederatedUser - The naming convention is `vault-{DOMINO_PROJECT_OWNER}-{DOMINO_PROJECT_NAME}-{DOMINO_USER_NAME}`
-   This type of Vault Role will be attached to a list of `policy_arns` or `iam_groups`
-
-The idea behind the two approaches is -
-
-1. AssumeRole - Is similar to federated user. User will get a set of AWS credentials for the roles (AD Groups) they are mapped to and the applicaion will need to pick one for a task at hand
-   ```json
-   {
-    "credential_type": "assumed_role",
-    "role_arns": ["arn:aws:iam::xxx:role/sample_domino_customer_role_1","arn:aws:iam::xxx:role/sample_domino_customer_role_2"]
-   }
-   ```
-2. FederatedUser - This is a single AWS Credential with permission set equal to all policies attached. The idea is to provide access to user for a project.
-   ```json
-   {
-       "credential_type": "federation_token",
-       "policy_arns": ["arn:aws:iam::xxx:policy/vault_test-user-1_policy","arn:aws:iam::xxx:policy/vault_test-user-2_policy"]
-   }
-   ```
-The App using these will know which one is used depending on how it retrieves the credentials.
-
-1. AssumeRole - [http://127.0.0.1:5010?user-name=test-user-1](http://127.0.0.1:5010?user-name=test-user-1)
-   Get me AWS Credentials for the calling user indexed by role arn.
-2. FederatedUser - [user-name=test-user-1&project-name=test-user-2-quick-start](user-name=test-user-1&project-name=test-user-2-quick-start)
-   Get me AWS Credentials indexed by Project-Owner+Project-Name-Calling-User-Name
-
-
-
-To generate test roles and policies run the following command:
+The script `src/admin/configure_vault_aws_roles.py` configures 
+1. The mapping between the user and roles in the `kv` secret store (http://127.0.0.1:8200/ui/vault/secrets/kv/list/domino/user/)
+2. The type of credentials for each role in the `aws` secret store (http://127.0.0.1:8200/ui/vault/secrets/aws/list)
+   - We make use of the token known as `Federation Token`
+   - Each role is attached policies
+     ```json
+        {"credential_type": "federation_token", "policy_arns": [#Comma seperated list of AWS Policy ARNS]}
+     ```
+   - Federation token has the benefit that it cannot assume any roles even if the policy attached to it permits it.
+3. You can generate a sample set of credentials as follows
 ```shell
-  python src/admin/configure_vault_aws_roles.py
+curl --location --request GET 'http://127.0.0.1:8200/v1/aws/creds/vault-sample_domino_customer_role_3' \
+--header 'X-Vault-Token: YOUR_TOKEN' \
+--header 'Content-Type: application/json' \
+--data-raw ' {"credential_type": "federation_token", "policy_arns": []}'
 ```
-
-## Test the Side-Car and App Function Locally
-
-### Start the Side-Car Locally
-To start the side-car locally run the following command 
-```shell
-  python src/mutation/app_vault_sidecar.py ./rootlocal 5010
-```
-
-In your APP pod, the same Flask App will run on port 5010. Details of the mutation are in the file
-`./mutations/app_cloud_creds_mutation.yaml`
-
-```yaml
-
-apiVersion: apps.dominodatalab.com/v1alpha1
-kind: Mutation
-metadata:
-  name: app-cloud-creds-mutation
-rules:
-  - # Optional. List of hardware tier ids
-    #hardwareTierIdSelector: []
-    # Optional. List of organization names
-    #organizationSelector: []
-    # Optional. List of user names
-    # Insert volume mount into specific containers
-    labelSelectors:
-    - "dominodatalab.com/workload-type=App"
-    # Insert arbitrary container into matching Pod.
-    insertContainer:
-      # 'app' or 'init'
-      containerType: app
-      # List of label selectors.
-      # ALL must match.
-      # Supportes equality and set-based matching
-      # Arbitrary object
-      spec:
-        name: z-vault-cloud-creds
-        image: quay.io/domino/app-cloud-creds:beta_v0
-        args: ['/','5010' ]
-        volumeMounts:
-          - name: log-volume
-            mountPath: /etc/log/
-          - mountPath: /etc/vault/
-            name: token
-          - name: dynamic-aws-creds-config
-            mountPath: /etc/config/
-            readOnly: true
-    insertVolumes:
-      - emptyDir: { }
-        name: log-volume
-      - name: token
-        secret:
-          secretName: vault-token
-      - name: dynamic-aws-creds-config
-        configMap:
-          name: dynamic-aws-creds-config
-
-
-
-```
-### Start the App Emulator Locally
-
-Now let us emulate the app with another flask app which runs on port 5100
-
-```shell
-python src/mutation/app-test.py ./rootlocal
-```
-
-
-#### Locally Test User Level Access
-To test how access is permitted for a user invoke the following. This is an `AssumeRole` operation
-and derives its credentials per role attached to the AD user based on their group membership
-
-```shell
-curl --location --request GET 'http://127.0.0.1:5100/readS3ByUserLevelAccessControl' \
---header 'X-Script-Name: /test-user-1/quick-start/anything/random' \
---header 'Domino-Username: test-user-1'
-```
-
-
-
-We are invoking the app for project `quick-start` owned by user `test-user-1` by user `test-user-1`
-
-To emulate the same APP invocation as `test-user-2` run the following command
-```shell
-curl --location --request GET 'http://127.0.0.1:5100/readS3ByUserLevelAccessControl' \
---header 'X-Script-Name: /test-user-1/quick-start/anything/random' \
---header 'Domino-Username: test-user-2'
-```
-
-First you need to get all the AWS roles attached to this user. This is obtained by making the call to the side-car
-```shell
-curl --location --request GET 'http://127.0.0.1:8200/v1/aws/roles/vault-test-user-2' \
---header 'X-Vault-Token: s.1XGbhTykFJFUJDl4ZS5V8oXy' 
-```
-The resulting output shows that the user is attached to two roles-
-
-- arn:aws:iam::<AWS_ACCOUNT_NO>:role/vault-sample_domino_customer_role_1
-- arn:aws:iam::<AWS_ACCOUNT_NO>:role/vault-sample_domino_customer_role_2
+This results in 
 ```json
 {
-    "request_id": "ce44c8de-8b8e-3006-deba-e0c783a36630",
-    "lease_id": "",
+    "request_id": "816e9df0-0658-c5e9-164c-f731dae4a2e6",
+    "lease_id": "aws/creds/vault-sample_domino_customer_role_3/FiDE5kjqfzHQB9H0IuuHcDVG",
     "renewable": false,
-    "lease_duration": 0,
+    "lease_duration": 900,
     "data": {
-        "credential_type": "assumed_role",
-        "default_sts_ttl": 0,
-        "iam_groups": null,
-        "iam_tags": null,
-        "max_sts_ttl": 0,
-        "permissions_boundary_arn": "",
-        "policy_arns": null,
-        "policy_document": "",
-        "role_arns": [
-            "arn:aws:iam::<AWS_ACCOUNT_NO>:role/vault-sample_domino_customer_role_1",
-            "arn:aws:iam::<AWS_ACCOUNT_NO>:role/vault-sample_domino_customer_role_2"
-        ],
-        "user_path": ""
+        "access_key": "ASIA5XXXXX",
+        "secret_key": "V5FXXXX",
+        "security_token": "Fwoxxx"
     },
     "wrap_info": null,
     "warnings": null,
@@ -479,88 +370,41 @@ The resulting output shows that the user is attached to two roles-
 }
 ```
 
-The output of the command below will test access control on all the buckets for each of those roles 
-separately. This is similar to Credential Propagation where you have to pick a profile for the credentials you are using.
-The permissions are not a "UNION" of the roles attached. 
 
 
+## Test the Side-Car Locally
+
+### Start the Side-Car Locally
+To start the side-car locally run the following command in the project root folder
 ```shell
-curl --location --request GET 'http://127.0.0.1:8200/v1/aws/roles/vault-test-user-2' \
---header 'X-Vault-Token: s.1XGbhTykFJFUJDl4ZS5V8oXy' 
+  python  python3 src/mutation/vault_creds_generator.py ./root 5010
 ```
+
+The root folder emulates the `/` folder in the actual side-car. Add the following files to it 
+1. `./root/etc/config/dynamic-aws-creds-config`
 ```json
 {
-    "arn:aws:iam::<AWS_ACCOUNT_NO>:role/vault-sample_domino_customer_role_1": [
-        {
-            "bucket": "domino-test-customer-bucket",
-            "key": "test-user-1/whoami.txt",
-            "value": "I am test-user-1"
-        },
-        {
-            "bucket": "domino-test-customer-bucket",
-            "key": "test-user-2/whoami.txt",
-            "value": "I am test-user-2"
-        },
-        {
-            "bucket": "domino-test-customer-bucket",
-            "key": "test-user-3/whoami.txt",
-            "value": "An error occurred (AccessDenied) when calling the GetObject operation: Access Denied"
-        }
-    ],
-    "arn:aws:iam::<AWS_ACCOUNT_NO>:role/vault-sample_domino_customer_role_2": [
-        {
-            "bucket": "domino-test-customer-bucket",
-            "key": "test-user-1/whoami.txt",
-            "value": "An error occurred (AccessDenied) when calling the GetObject operation: Access Denied"
-        },
-        {
-            "bucket": "domino-test-customer-bucket",
-            "key": "test-user-2/whoami.txt",
-            "value": "I am test-user-2"
-        },
-        {
-            "bucket": "domino-test-customer-bucket",
-            "key": "test-user-3/whoami.txt",
-            "value": "An error occurred (AccessDenied) when calling the GetObject operation: Access Denied"
-        }
-    ]
+  "vault_endpoint":"http://127.0.0.1:8200",
+  "vault_namespace":"",
+  "polling_interval_in_seconds" : 300,
+  "refresh_threshold_in_seconds" : 600,
+  "lease_increment" : 300,
+  "default_user" : "default"
 }
 ```
 
-All aws credentials have a time to live (TTL) for 60 mins. And will be cached for 60 mins
-They will be refreshed if will be valid for less than 10 mins.
+2. `./root/var/log/vault/` - This is where the side-car writes the `app.log`
 
-To refresh the cache immediately, you need to pass another header parameter `Creds-Refresh` as True
-```shell
-curl --location --request GET 'http://127.0.0.1:5100/reads3byusr' \
---header 'X-Script-Name: /test-user-1/quick-start/anything/random' \
---header 'Domino-Username: test-user-2'
---header 'Creds-Refresh: True'
+3. `./root/etc/vault/token` - Add your `vault-token` here. It should be already added by the `install-local.sh` script
+
+4. `./root/etc/.aws` - The `credentials` file will be created in this folder
+
+5. `./root/etc/labels/labels` - This file will contain the pod labels. For now only add the followint entry to it
 ```
-
-#### Locally Test By Project and User Level Access
-
-Run the following curl command
-```shell
-curl --location --request GET 'http://127.0.0.1:5100/reads3byprjusr' \
---header 'X-Script-Name: /test-user-1/quick-start/rrr/rrr' \
---header 'Domino-Username: test-user-1'
+dominodatalab.com/starting-user-username=test-user-2
 ```
+You can change to any of the three users here and restart the program to emulate each users side-car
 
-This will generated a FEDERATED_USER with policies attached to combination of project and invoking user
-All aws credentials have a time to live (TTL) for 60 mins. And will be cached for 60 mins
-They will be refreshed if will be valid for less than 10 mins.
-
-To refresh the cache immediately, you need to pass another header parameter `Creds-Refresh` as True
-
-
-## Example App
-An example app can be created using the following artifacts
-
-1. Go to the folder `./app_artifacts/mnt`
-2. Create a project in Domino or reuse the `quick-start` project
-3. Add/Replace the contents of `./app_artifacts/mnt` inside you project `/mnt/` folder
-4. Start the app
 
 ## Remote Installation and Local Testing
 ```

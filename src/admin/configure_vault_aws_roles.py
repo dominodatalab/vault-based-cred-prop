@@ -37,7 +37,7 @@ if __name__ == "__main__":
                     if not u in users:
                         users.append(u)
 
-    vault_role_mappings = "./config/vault_role_by_project_and_user.json"
+
     vault_addr = "http://127.0.0.1:8200"
     vault_ns = ""
 
@@ -57,6 +57,15 @@ if __name__ == "__main__":
         "X-Vault-Namespace": vault_ns,
         "Content-Type": "application/json",
     }
+
+    #Configure lease
+    configure_lease_url = f"{vault_addr}/v1/aws/config/lease?X-Vault-Token={vault_token}&X-Vault-Namespace={vault_ns}"
+    configure_lease_payload = {"lease" : "900", "lease_max" : "72000"}
+    payload = json.dumps(configure_lease_payload)
+    response = requests.request(
+        "POST", configure_lease_url, headers=headers, data=payload
+    )
+    print(response)
     for r in aws_roles:
         policy_arns = []
         role_policies = aws_roles_to_policies_mapping[r]
@@ -67,6 +76,8 @@ if __name__ == "__main__":
         put_user_role_payload = {
             "credential_type": "federation_token",
             "policy_arns": policy_arns,
+            "default_sts_ttl": 900,
+            "max_sts_ttl": 72000
         }
         payload = json.dumps(put_user_role_payload)
         print(put_user_role_payload)

@@ -2,15 +2,7 @@ kind: Mutation
 metadata:
   name: dynamic-vault-based-creds-mutation
 rules:
-  - # Optional. List of hardware tier ids
-    #hardwareTierIdSelector: []
-    # Optional. List of organization names
-    #organizationSelector: []
-    # Optional. List of user names
-    #usernameSelector: []
-    # Optional. List of <project_owner>/<project_name>.
-    #projectSelector: []
-    # Insert volume mount into specific containers
+  -
     labelSelectors:
       - "dominodatalab.com/workload-type in (Workspace,Batch,Scheduled)"
     insertVolumeMounts:
@@ -23,15 +15,9 @@ rules:
         - mountPath: /etc/.aws/
           name: dynamic-aws-creds
           readOnly: true
-    # Insert arbitrary container into matching Pod.
-    insertContainer:
-      # 'app' or 'init'
-      containerType: app
-      # List of label selectors.
-      # ALL must match.
-      # Supportes equality and set-based matching
 
-      # Arbitrary object
+    insertContainer:
+      containerType: app
       spec:
         name: z-vault-client-side-car
         image: quay.io/domino/vault-creds-prop:latest
@@ -66,7 +52,6 @@ rules:
             - fieldRef:
                 fieldPath: metadata.labels
               path: "labels"
-    # Make the run container default .aws path to be the new one
     modifyEnv:
       containerSelector:
       - run
