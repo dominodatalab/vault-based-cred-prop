@@ -1,0 +1,64 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "iam:GetUser"
+            ],
+            "Resource": [
+                "arn:aws:iam::{{aws_account}}:user/*"
+            ]
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "iam:*"
+            ],
+            "Resource": [
+                "arn:aws:iam::{{aws_account}}:user/{{vault_user}}"
+            ]
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "sts:AssumeRole"
+            ],
+            "Resource": [
+                "arn:aws:iam::{{aws_account}}:role/vault-*"
+            ]
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "iam:CreatePolicy",
+                "iam:DeletePolicy"
+            ],
+            "Resource": [
+                "arn:aws:iam::{{aws_account}}:policy/vault-*"
+            ]
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "iam:*",
+                "iam:AttachRolePolicy",
+                "iam:DetachRolePolicy",
+                "iam:GetRole",
+                "iam:CreateRole",
+                "iam:DeleteRole",
+                "iam:GetUser"
+            ],
+            "Resource": [
+                "arn:aws:iam::{{aws_account}}:role/vault-*"
+            ]
+        },
+       {
+            "Effect": "Allow",
+            "Action": [
+                "sts:GetFederationToken"
+            ],
+            "Resource": "arn:aws:sts::{{aws_account}}:federated-user/vault-*"
+        }
+    ]
+}

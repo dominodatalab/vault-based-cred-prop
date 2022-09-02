@@ -1,0 +1,16 @@
+{
+  "AD_GROUPS": ["GRP-1","GRP-2","GRP-3"],
+  "AWS_ROLES":  ["vault-sample_domino_customer_role_1","vault-sample_domino_customer_role_2","vault-sample_domino_customer_role_3"],
+  "BUCKET_SUB_FOLDERS" : ["test-user-1","test-user-2","vault-test-user-3"],
+  "AWS_ROLES_TO_POLICIES_MAPPING": {
+    "vault-sample_domino_customer_role_1": ["vault-test-user-1_policy","vault-test-user-2_policy"],
+    "vault-sample_domino_customer_role_2": ["vault-test-user-2_policy"],
+    "vault-sample_domino_customer_role_3": ["vault-test-user-3_policy"]
+  },
+  "AD_GROUP_TO_AWS_ROLE_MAPPING": {"GRP-1": "vault-sample_domino_customer_role_1",
+                                   "GRP-2": "vault-sample_domino_customer_role_2",
+                                   "GRP-3": "vault-sample_domino_customer_role_3"},
+  "AD_GROUP_TO_USER_MAPPING": {"GRP-1": ["test-user-1","test-user-2"],
+                               "GRP-2": ["test-user-2"],
+                               "GRP-3": ["test-user-3"]}
+}

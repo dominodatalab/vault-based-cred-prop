@@ -1,0 +1,4 @@
+{
+  "domino_vault_user" : "vault-domino",
+  "customer_s3_bucket" : "domino-test-customer-bucket"
+}

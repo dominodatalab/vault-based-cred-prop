@@ -1,0 +1,77 @@
+kind: Mutation
+metadata:
+  name: dynamic-vault-based-creds-mutation
+rules:
+  - # Optional. List of hardware tier ids
+    #hardwareTierIdSelector: []
+    # Optional. List of organization names
+    #organizationSelector: []
+    # Optional. List of user names
+    #usernameSelector: []
+    # Optional. List of <project_owner>/<project_name>.
+    #projectSelector: []
+    # Insert volume mount into specific containers
+    labelSelectors:
+      - "dominodatalab.com/workload-type in (Workspace,Batch,Scheduled)"
+    insertVolumeMounts:
+      containerSelector:
+        - run
+      volumeMounts:
+        - name: log-volume
+          mountPath: /etc/log/vault/
+          readOnly: true
+        - mountPath: /etc/.aws/
+          name: dynamic-aws-creds
+          readOnly: true
+    # Insert arbitrary container into matching Pod.
+    insertContainer:
+      # 'app' or 'init'
+      containerType: app
+      # List of label selectors.
+      # ALL must match.
+      # Supportes equality and set-based matching
+
+      # Arbitrary object
+      spec:
+        name: z-vault-client-side-car
+        image: quay.io/domino/vault-creds-prop:latest
+        args: [ '/',5010 ]
+        volumeMounts:
+          - name: log-volume
+            mountPath: /etc/log/vault/
+          - name: podinfo
+            mountPath: /etc/labels/
+          - name: dynamic-aws-creds-config-volume
+            mountPath: /etc/config/
+          - mountPath: /etc/.aws/
+            name: dynamic-aws-creds
+          - mountPath: /etc/vault-token/
+            name: vault-token
+            readOnly: true
+    insertVolumes:
+      - emptyDir: { }
+        name: dynamic-aws-creds
+      - emptyDir: { }
+        name: log-volume
+      - name: dynamic-aws-creds-config-volume
+        configMap:
+          name: dynamic-aws-creds-config
+      - name: vault-token
+        secret:
+          secretName: vault-token
+      - name: podinfo
+        downwardAPI:
+          defaultMode: 420
+          items:
+            - fieldRef:
+                fieldPath: metadata.labels
+              path: "labels"
+    # Make the run container default .aws path to be the new one
+    modifyEnv:
+      containerSelector:
+      - run
+      env:
+      - name: AWS_SHARED_CREDENTIALS_FILE
+        value: "/etc/.aws/credentials"
+      - name: AWS_CONFIG_FILE
+        value: "/etc/.aws/config"

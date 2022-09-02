@@ -1,0 +1,47 @@
+{
+  "users_by_project": {
+    "test-user-1-quick-start": {
+      "test-user-1": {
+        "policies": [
+          "vault-test-user-1_policy",
+          "vault-test-user-2_policy"
+        ]
+      },
+      "test-user-2": {
+        "policies": [
+          "vault-test-user-2_policy"
+        ]
+      },
+      "test-user-3": {
+        "policies": [
+          "vault-test-user-3_policy"
+        ]
+      }
+    },
+    "test-user-2-quick-start": {
+      "test-user-2": {
+        "policies": [
+          "vault-test-user-2_policy"
+        ]
+      },
+      "test-user-3": {
+        "policies": [
+          "vault-test-user-3_policy"
+        ]
+      }
+    },
+    "test-user-3-quick-start": {
+      "test-user-1": {
+        "policies": [
+          "vault-test-user-2_policy"
+        ]
+      },
+      "test-user-3": {
+        "policies": [
+          "vault-test-user-3_policy"
+        ]
+      }
+    }
+  }
+}
+

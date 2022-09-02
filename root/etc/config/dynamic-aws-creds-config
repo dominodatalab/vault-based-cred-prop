@@ -1,0 +1,7 @@
+{
+  "vault_endpoint":"http://127.0.0.1:8200",
+  "vault_namespace":"",
+  "polling_interval_in_seconds" : 30,
+  "refresh_threshold_in_seconds" : 60,
+  "lease_increment" : 30
+}
