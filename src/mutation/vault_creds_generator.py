@@ -207,7 +207,8 @@ def activate_job():
 
 @app.route("/healthz", methods=["GET"])
 def healthz():
-    return {}
+    logging.debug("Thread responsible for refreshing AWS Creds started")
+    return {"healthy":True}
 
 
 def start_runner():
@@ -293,7 +294,7 @@ if __name__ == "__main__":
     format = "%(asctime)s: %(message)s"
     # base_path = os.path.join(os.getcwd() , '../test_pod_fs/')
     base_path = sys.argv[1]
-    port_no = 5010
+    port_no = 5011
     if len(sys.argv) > 2:
         port_no = int(sys.argv[2])
 
@@ -309,7 +310,7 @@ if __name__ == "__main__":
     )
     logging.info("Base path " + base_path)
     log = logging.getLogger("werkzeug")
-
+    print('configure app')
     configure_app()
     # Do everything once as initialization step
     # First AWS_Credentials_Fetch
@@ -320,6 +321,7 @@ if __name__ == "__main__":
     # Now start refresher thread
 
     # Now start flask server
+    print('start app runner')
     start_runner()
     logging.debug("Starting Flask")
     app.run(debug=True, host="0.0.0.0", port=port_no)

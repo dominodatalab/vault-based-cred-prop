@@ -21,14 +21,15 @@ else
 fi
 echo $VAULT_NAMESPACE
 
-rm -rf ./root/etc/vault-token
-mkdir ./root/etc/vault-token
+rm -rf ./root/etc/vault
+mkdir ./root/etc/vault
 
 #Generate a app token to allow Domino to communicate with Vault
 vault policy write domino ./vault_policies/domino.hcl
 export VAULT_TOKEN=$(vault token create -orphan -policy=domino -period=768h  -ttl 768h -format=json | jq .auth.client_token | sed 's/"//g' )
 
-echo $VAULT_TOKEN > ./root/var/vault/token
+echo "About to write token to secrets and folder"
+echo $VAULT_TOKEN > ./root/etc/vault/token
 #We will use on these secrets engine. But there are many more (https://www.vaultproject.io/docs/secrets)
 vault secrets enable aws
 vault secrets enable kv

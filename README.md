@@ -375,10 +375,7 @@ This results in
 ## Test the Side-Car Locally
 
 ### Start the Side-Car Locally
-To start the side-car locally run the following command in the project root folder
-```shell
-  python  python3 src/mutation/vault_creds_generator.py ./root 5010
-```
+
 
 The root folder emulates the `/` folder in the actual side-car. Add the following files to it 
 1. `./root/etc/config/dynamic-aws-creds-config`
@@ -402,6 +399,29 @@ The root folder emulates the `/` folder in the actual side-car. Add the followin
 5. `./root/etc/labels/labels` - This file will contain the pod labels. For now only add the followint entry to it
 ```
 dominodatalab.com/starting-user-username=test-user-2
+```
+
+
+
+To start the side-car locally run the following command in the project root folder
+```shell
+  python  python3 src/mutation/vault_creds_generator.py ./root 5010
+```
+In another shell run this command
+```shell
+export AWS_SHARED_CREDENTIALS_FILE=${PWD}/root/etc/.aws/credentials 
+aws sts get-caller-identity --profile=vault-sample_domino_customer_role_2
+
+cat $AWS_SHARED_CREDENTIALS_FILE 
+#You will see a profile per role similar to domino creds prop. 
+
+#This should succeed
+aws --profile=vault-sample_domino_customer_role_2 s3 cp s3://domino-test-customer-bucket/test-user-2/whoami.txt  /tmp/
+
+#This will fail with access forbidden error
+aws --profile=vault-sample_domino_customer_role_2 s3 cp s3://domino-test-customer-bucket/test-user-3/whoami.txt  /tmp/
+
+
 ```
 You can change to any of the three users here and restart the program to emulate each users side-car
 
