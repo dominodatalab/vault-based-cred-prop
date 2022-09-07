@@ -411,10 +411,12 @@ In another shell run this command
 ```shell
 mkdir ${PWD}/root/etc/.aws/
 export AWS_SHARED_CREDENTIALS_FILE=${PWD}/root/etc/.aws/credentials 
-aws sts get-caller-identity --profile=vault-sample_domino_customer_role_2
 
 cat $AWS_SHARED_CREDENTIALS_FILE 
 #You will see a profile per role similar to domino creds prop. 
+
+aws sts get-caller-identity --profile=vault-sample_domino_customer_role_2
+#Notice the output. We are using federation tokens here
 
 #This should succeed
 aws --profile=vault-sample_domino_customer_role_2 s3 cp s3://domino-test-customer-bucket/test-user-2/whoami.txt  /tmp/
@@ -424,7 +426,7 @@ aws --profile=vault-sample_domino_customer_role_2 s3 cp s3://domino-test-custome
 
 
 ```
-You can change to any of the three users here and restart the program to emulate each users side-car
+You can change to any of the three users(`test-user-1`, `test-user-2` and `test-user-3`) here and restart the program to emulate each users side-car
 
 
 ## Remote Installation and Local Testing
