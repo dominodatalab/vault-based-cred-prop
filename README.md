@@ -409,6 +409,7 @@ To start the side-car locally run the following command in the project root fold
 ```
 In another shell run this command
 ```shell
+mkdir ${PWD}/root/etc/.aws/
 export AWS_SHARED_CREDENTIALS_FILE=${PWD}/root/etc/.aws/credentials 
 aws sts get-caller-identity --profile=vault-sample_domino_customer_role_2
 
