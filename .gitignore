@@ -132,6 +132,6 @@ dmypy.json
 
 idea
 aws_creds/creds.json
-
+root/etc/.aws/credentials
 aws_creds/creds.json
 aws_creds/creds.json
