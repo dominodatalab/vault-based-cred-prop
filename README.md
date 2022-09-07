@@ -58,7 +58,7 @@ For local testing add the following environment variables and run `./install_loc
 export VAULT_ADDR=http://127.0.0.1:8200 #Replace with your own url for remote vault
 export VAULT_TOKEN="ADD HERE"
 export docker_version=beta_v3 #Add the side-car to a docker registry with a tag
-./scripts/install_local.sh $docker_version
+./scripts/install.sh $docker_version
 ```
 
 For remote vault run `./install.sh`

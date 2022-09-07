@@ -6,8 +6,11 @@ import json
 from botocore import *
 
 if __name__ == "__main__":
-    creds_file = "./aws_creds/creds.json"
+    creds_folder = "./aws_creds"
+    creds_file = creds_folder + "/creds.json"
     config_file = "./config/install_config.json"
+    if not os.path.exists("./aws_creds/"):
+        os.mkdir(creds_folder)
 
     domino_vault_user = ""
     customer_s3_bucket = ""
